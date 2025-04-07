@@ -2,6 +2,8 @@ import os
 import tempfile
 import subprocess
 import colorama
+import pandas as pd
+import numpy as np
 from colorama import Fore, Style
 from email import policy
 from email.parser import BytesParser
@@ -9,6 +11,9 @@ from email.parser import BytesParser
 # Import your utility modules
 from utils.emailParse import parse_email
 from utils.attachmentAnalyze import analyze_attachment
+from utils.featureExtract import extract_url_features
+from utils.predict_meta import predict_meta
+
 
 def print_banner():
     banner = f"""
@@ -50,45 +55,66 @@ def extract_attachments(msg):
     return attachments
 
 def print_report(email_data, attachment_analysis):
-    """
-    Prints a simplified, stylized report.
-    (Using placeholder risk scores and flags for now.)
-    """
-    # Simulated risk scores and flags (since models are not yet integrated)
-    phishing_risk_score = 0.87
-    phishing_flags = [
-        "Unusual domain (paypal-update.com)",
-        "Urgent language",
-        "Spelling errors",
-        "3 suspicious links"
-    ]
-    verdict = "High Risk Email"
-    
-    # Report Header
+    # === Construct input features ===
+    urls = email_data.get("urls", [])
+    url = urls[0] if urls else ""
+    url_feats = extract_url_features(pd.DataFrame([{"url": url}]))
+
+    attach_feats = pd.DataFrame([a["features"] for a in attachment_analysis]) if attachment_analysis else pd.DataFrame([{}])
+    phish_feats = pd.DataFrame([email_data.get("phish_features", {})])
+
+    # === Meta model prediction ===
+    meta_result = predict_meta(url_feats, attach_feats, phish_feats)
+    phishing_risk_score = meta_result["risk_score"]
+    verdict = f"{Fore.RED}Phishing Detected" if meta_result["verdict"] == "Phishing" else f"{Fore.GREEN}Benign Email"
+
+    # === Report Output ===
     print("\n" + Fore.CYAN + "📧 Email Analysis Report:" + Style.RESET_ALL)
     print(Fore.MAGENTA + "-" * 50 + Style.RESET_ALL)
     print(f"{Fore.GREEN}Sender:{Style.RESET_ALL} {email_data.get('From', 'N/A')}")
     print(f"{Fore.GREEN}Subject:{Style.RESET_ALL} {email_data.get('Subject', 'N/A')}\n")
     
-    # Phishing Analysis
     print(f"{Fore.RED}🛑 Phishing Risk Score:{Style.RESET_ALL} {phishing_risk_score:.2f}")
+    
+    phishing_flags = []
+
+    if phish_feats.get("num_spelling_errors", 0) > 3:
+        phishing_flags.append("Multiple spelling errors")
+
+    if phish_feats.get("num_urgent_keywords", 0) > 0:
+        phishing_flags.append("Urgent language used")
+
+    if phish_feats.get("num_links", 0) > 3:
+        phishing_flags.append(f"{phish_feats['num_links']} suspicious links")
+
+    if phish_feats.get("num_email_addresses", 0) > 2:
+        phishing_flags.append("Multiple email addresses found")
+
+    if email_data.get("Body_HTML", ""):
+        phishing_flags.append("HTML content present")
+    
     print("Flags:")
     for flag in phishing_flags:
         print(f"  - {flag}")
     print()
-    
-    # Attachment Analysis (if any)
+
     if attachment_analysis:
         for analysis in attachment_analysis:
             filename = analysis.get("filename", "unknown_attachment")
-            attachment_risk_score = 0.92  # Simulated value
-            attachment_flags = [
-                "Contains macros",
-                "High entropy",
-                "Uncommon extension"
-            ]
+            attachment_flags = analysis.get("flags", ["Suspicious content", "Uncommon extension"])
             print(f"{Fore.YELLOW}📎 Attachment:{Style.RESET_ALL} {filename}")
-            print(f"{Fore.RED}⚠️ Attachment Risk Score:{Style.RESET_ALL} {attachment_risk_score:.2f}")
+            print(f"{Fore.RED}⚠️ Attachment Risk Score:{Style.RESET_ALL} {meta_result['base_probs']['attachment']:.2f}")
+            attachment_flags = []
+
+            if analysis.get("has_macros") == True:
+                attachment_flags.append("Contains macros")
+
+            if analysis.get("entropy", 0) > 7.5:
+                attachment_flags.append("High entropy")
+
+            if analysis.get("file_extension", "") not in [".pdf", ".docx", ".xlsx", ".pptx", ".csv"]:
+                attachment_flags.append("Uncommon extension")
+            
             print("Flags:")
             for flag in attachment_flags:
                 print(f"  - {flag}")
@@ -96,7 +122,6 @@ def print_report(email_data, attachment_analysis):
     else:
         print(f"{Fore.YELLOW}No attachments found.{Style.RESET_ALL}\n")
     
-    # Final Verdict
     print(f"{Fore.GREEN}✅ Verdict:{Style.RESET_ALL} {verdict}")
     print(Fore.MAGENTA + "-" * 50 + Style.RESET_ALL)
 

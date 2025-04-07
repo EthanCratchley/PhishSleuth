@@ -1,0 +1,13 @@
+xgboost
+scikit-learn
+pandas
+numpy
+colorama
+tldextract
+urlextract
+pyspellchecker
+oletools
+python-magic
+pdfid
+pefile
+email

@@ -1,1 +1,12 @@
 Emails/
+__pycache__
+ember2018
+enron_progress.csv
+phishing_progress.csv
+phishing_training_data.csv
+ember_features_flat.csv 
+train_features_combined.csv
+email_phishing_data.csv
+malicious_phish.csv 
+PhiUSIIL_Phishing_URL_Dataset.csv
+url_features_ready.csv

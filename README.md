@@ -1,156 +1,105 @@
-# AI Phishing Email and Attachment Detection
+# PhishSleuth: AI-Powered Email Phishing Detection CLI
 
 ## Overview
-Goal: Build a CLI tool that scans an email file (or raw email input), analyzes:
-
-- The email content (subject, body, sender) for phishing indicators
-- The URLs for suspicious domains or typosquatting
-- The attachments for static risk features
-- Then outputs a detailed report with phishing scores, flagged issues, and optional suggestions.
+PhishSleuth is a robust command-line tool for analyzing `.eml` email files to detect phishing threats using multiple AI models. It combines text-based analysis, URL inspection, and attachment examination into a stacked ensemble model for high-accuracy phishing classification.
 
 ## Tech Stack
-- Language: Python
-- ML Models: scikit-learn, xgboost, joblib
-- NLP/Text Processing: nltk, re, spacy, tldextract, email
-- Static Analysis: oletools, pdfid, python-magic, pefile
-- CLI: argparse, colorama
-- Optional: VirusTotal API (for validation)
+- Python 3.11
+- XGBoost for all primary base classifiers
+- Scikit-learn for preprocessing and meta model (Logistic Regression)
+- pandas / numpy for data manipulation
+- colorama for colorful CLI UI
+- oletools, pdfid.py, pefile, and python-magic for attachment inspection
 
+## Features:
+- Email Body Analysis: Detects phishing intent based on NLP and heuristic text features.
+- URL Inspection: Analyzes links in the email using domain features, TLDs, and ML models.
+- Attachment Analysis: Examines attachments (PDF, Office, EXE) for malicious characteristics.
+- Stacking Meta Model: Combines predictions from base models to improve final accuracy.
+- User-Friendly CLI: Just provide a path to your email and get a full risk report.
 
 ## Folder Structure 
-phishsleuth/
-├── phishing_model/
-│   ├── train_phishing_model.py
-│   ├── phishing_model.pkl
-├── attachment_model/
-│   ├── train_attachment_model.py
-│   ├── attachment_model.pkl
-├── utils/
-│   ├── feature_extraction.py
-│   ├── email_parser.py
-│   ├── attachment_analyzer.py
-├── main.py  # CLI entry point
-├── requirements.txt
-├── README.md
-└── sample_emails/
-
-## Plan
-1. Accept .eml files or raw string input.
-Use Python’s built-in email module to extract:
-- Subject
-- Body (plain text or HTML)
-- Sender
-- Attachments
-Output: Dict or object representing email structure.
-
-2. Extract Static Features for Attachments
-If PDF, DOCX, or EXE, use:
-- python-magic for MIME/type
-- oletools for VBA/macros in Office
-- pdfid for JavaScript, embedded files
-- pefile for EXE metadata
-File size, entropy, # of embedded objects
-
-3. Extract Features for Phishing Detection
-Tokenize body text, extract basic NLP features:
-- Links
-- Words
-- Spelling Errors
-- Email Address
-Extract URL domain info using tldextract, re, or urlparse.
-
-4. Train ML Models 
-- Phishing Classifier:
-  - TF-IDF of body + engineered metadata
-  - Model: Logistic Regression / XGBoost
-- Attachment Classifier:
-  - Static features → Random Forest or XGBoost
-
-5. Evaluate and Test Tool
-
-6. Iterate
-- Export results to JSON or CSV
-- Add logging
-- Add config file for thresholds
-- Optional: Build a web UI later (Streamlit) or Extension
-
-
-**Example Output:**
 ```
+phish-detection/
+├── attachment_model/       # Attachment model files and raw data
+├── phishing_model/         # Text-based phishing detection model
+├── url_model/              # URL classifier model
+├── metaModel/              # Final stacking model and metadata
+├── utils/                  # All utility modules
+├── main.py                 # CLI interface
+├── metaModel.py            # Training the stacking model
+├── requirements.txt        # Python dependencies
+└── README.md               # This documentation
+```
+
+## Installation:
+1. Clone the repository
+```sh
+git clone https://github.com/yourusername/phish-detection.git
+cd phish-detection
+```
+2. Install Dependencies
+```sh
+pip install -r requirements.txt
+```
+
+## Usage: 
+**CLI Mode: Run the File**
+```sh
+python main.py
+```
+
+You will be prompted:
+```sh
+Enter the path to your .eml file (or type 'quit' to exit):
+```
+
+Enter email path:
+```sh
+Email file path: email.eml
+```
+
+**Sample Output:**
+```sh
 📧 Email Analysis Report:
-----------------------------------
-Sender: support@paypal-update.com
-Subject: URGENT: Your Account Will Be Suspended
+--------------------------------------------------
+Sender: Ethan <hello@ethan.com>
+Subject: Try PhishSleuth ✅✅✅
 
-🛑 Phishing Risk Score: 0.87
+🛑 Phishing Risk Score: 0.00
 Flags:
-- Unusual domain (paypal-update.com)
-- Urgent language
-- Spelling errors
-- 3 suspicious links
+  - HTML content present
 
-📎 Attachment: invoice.docm
-⚠️ Attachment Risk Score: 0.92
-Flags:
-- Contains macros
-- High entropy
-- Uncommon extension
-
-✅ Verdict: High Risk Email
+No attachments found.
+✅ Verdict: Benign Email
+--------------------------------------------------
 ```
-Output Report: 
-- Phishing score (0–1)
-- Phishing indicators
-- URL flags
-- Attachment file risk score (0–1)
-- Flags (e.g., macro present, high entropy)
 
-## Final Notes
-What the Tool Will Do:
-1. Takes an email file (.eml) as input
-2. Scans the email for signs of phishing:
-   1. Suspicious Sender
-   2. Urget or Manipulative Language
-   3. Suspicious Links
-3. Analyzes any attachments in the email for signs that they might be malicious
-   1. Hiiden macros
-   2. Secret code
-   3. Unusual file types
-4. Gives user a risk score/report
+## Models Used
+**Base Models**
+- Email Phishing Model: XGBoost trained on NLP/text features.
+- URL Classifier: XGBoost trained on domain, TLD, link structure.
+- Attachment Classifier: XGBoost trained on file entropy, type, macros, etc.
 
-ML Use Case:
-1. Phishing Email Detection
-- Decide whether the email content looks like a phishing attempt
-- You train a machine learning model (e.g., Logistic Regression or XGBoost) on real phishing and non-phishing emails.
-- The model learns patterns based on features like:
-  - Words in the subject/body (from TF-IDF or NLP)
-  - Presence of suspicious links or sender domains
-  - Spelling errors, urgent language, etc.
+**Meta Model**
+- Logistic Regression: Takes probability outputs of base models and predicts final risk.
 
-2. Email Attachment Risk Classifier
-- Predict if an email attachment is likely to be malicious.
-- You extract features from the attachment without opening it:
-  - File size, entropy (how random the contents look)
-  - Whether it has macros (in Word files)
-  - Whether it's an uncommon file type (like .scr or .exe)
-- You train another ML model (e.g., Random Forest or XGBoost) on known clean and malicious attachments.
+## Performance
+Final Stacking Model Metrics:
 
-## Research Paper: 
+- Accuracy: 99.26%
+- F1 Score: 0.9936
+- ROC AUC: 0.9978
 
-**Topic:**“PhishSleuth: Lightweight Static Analysis and AI for Phishing and Attachment Detection in Email”
+## Future Plans
+- Browser extension integration
+- Add support for multilingual phishing detection
+- Web UI dashboard to visualize results
+- Integrate virus scanning and advanced sandbox behavior detection
+- Real-time email server integration and threat response API
 
-**Sections:**
-- Intro – Email-based threats, problem statement
-- Background – Phishing, attachment-based malware, prior solutions
-- Methodology – Feature engineering, ML model choice, CLI architecture
-- Experiments – Dataset used, metrics, model performance
-- Discussion – Strengths, limitations (e.g., can't catch 0-day), future work
-- Conclusion
+## License
+MIT License. Feel free to use, modify, and contribute.
 
-# To Do:
-- How does .eml hand emails with multiple replies, forward emails etc?
-- Improve terminal design
-- Clean Outputs
-- Give scores
-- Build to look like example output
-- Make extension 
+## Contributions
+Pull requests welcome! Please open an issue first to discuss major changes.

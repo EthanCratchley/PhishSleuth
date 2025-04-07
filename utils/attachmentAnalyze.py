@@ -4,73 +4,80 @@ from collections import Counter
 import magic
 import subprocess
 from oletools.olevba import VBA_Parser  
-import pefile                           
-
+import pefile                            
 
 def calculate_entropy(data):
     """
-    Calculate the Shannon entropy of the file data.
+    Calculate the Shannon entropy of file data.
     """
     if not data:
         return 0
     counter = Counter(data)
     total = len(data)
-    entropy = 0
-    for count in counter.values():
-        p = count / total
-        entropy -= p * math.log2(p)
+    entropy = -sum((count / total) * math.log2(count / total) for count in counter.values())
     return entropy
 
 def analyze_attachment(file_path):
     """
-    Analyzes the attachment file and returns a dictionary with key features.
+    Analyze an attachment and return a dictionary of extracted features.
     """
     features = {}
 
-    # File size
-    file_size = os.path.getsize(file_path)
-    features["file_size"] = file_size
+    # 1️⃣ Basic file metadata
+    try:
+        features["file_size"] = os.path.getsize(file_path)
+    except Exception:
+        features["file_size"] = 0
 
-    # Read file bytes
-    with open(file_path, "rb") as f:
-        data = f.read()
+    try:
+        with open(file_path, "rb") as f:
+            data = f.read()
+    except Exception:
+        data = b""
 
-    # Calculate entropy
     features["entropy"] = calculate_entropy(data)
 
-    # Get MIME type using python-magic
-    mime = magic.from_buffer(data, mime=True)
+    # 2️⃣ File type info
+    try:
+        mime = magic.from_buffer(data, mime=True)
+    except Exception:
+        mime = "unknown"
     features["mime_type"] = mime
 
-    # Get file extension
     ext = os.path.splitext(file_path)[1].lower()
     features["file_extension"] = ext
 
-    # PDF Analysis using pdfid.py 
+    # 3️⃣ PDF Analysis (using pdfid.py)
+    features["has_pdf_suspicious_tags"] = 0
     if mime == "application/pdf" or ext == ".pdf":
         try:
-            # Ensure pdfid.py is in your PATH or provide the full path to it
             output = subprocess.check_output(["pdfid.py", file_path], universal_newlines=True)
-            features["pdfid_output"] = output
-        except Exception as e:
-            features["pdfid_output"] = f"Error running pdfid: {e}"
+            suspicious_tags = ["/JS", "/JavaScript", "/AA", "/OpenAction", "/Launch"]
+            tag_count = sum(line.startswith(tag) and int(line.split(":")[1].strip()) > 0 for line in output.splitlines() for tag in suspicious_tags)
+            features["has_pdf_suspicious_tags"] = int(tag_count > 0)
+        except Exception:
+            features["has_pdf_suspicious_tags"] = 0
 
-    # Office Documents Analysis for Macros
+    # 4️⃣ Office Documents - Macro Detection
+    features["has_macros"] = 0
     if ext in [".doc", ".docm", ".docx", ".xls", ".xlsm", ".ppt", ".pptm"]:
         try:
             vbaparser = VBA_Parser(file_path)
-            has_macros = vbaparser.detect_vba_macros()
-            features["has_macros"] = has_macros
-        except Exception as e:
-            features["has_macros"] = f"Error checking macros: {e}"
+            features["has_macros"] = int(vbaparser.detect_vba_macros())
+        except Exception:
+            features["has_macros"] = 0
 
-    # Executable Analysis using pefile
+    # 5️⃣ Executables - PE Info
+    features["pe_sections"] = 0
+    features["pe_entry_point"] = 0
     if ext == ".exe":
         try:
             pe = pefile.PE(file_path)
             features["pe_sections"] = len(pe.sections)
-            features["pe_entry_point"] = hex(pe.OPTIONAL_HEADER.AddressOfEntryPoint)
-        except Exception as e:
-            features["pe_info"] = f"Error analyzing executable: {e}"
+            features["pe_entry_point"] = pe.OPTIONAL_HEADER.AddressOfEntryPoint
+        except Exception:
+            pass
 
-    return features
+    return {
+        "features": features
+    }
