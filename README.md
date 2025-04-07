@@ -1,5 +1,7 @@
 # PhishSleuth: AI-Powered Email Phishing Detection CLI
 
+![PhishSleuth](phish.png)
+
 ## Overview
 PhishSleuth is a robust command-line tool for analyzing `.eml` email files to detect phishing threats using multiple AI models. It combines text-based analysis, URL inspection, and attachment examination into a stacked ensemble model for high-accuracy phishing classification.
 
